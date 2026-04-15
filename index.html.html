@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racing Edge — Analysis Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #c8ff00;
+    --accent2: #ff6b35;
+    --text: #e8e8e8;
+    --muted: #666;
+    --danger: #ff3b3b;
+    --success: #00e676;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--muted); }
+
+  .api-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .api-bar input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.4rem 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    width: 280px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .api-bar input:focus { border-color: var(--accent); }
+  .api-bar input::placeholder { color: var(--muted); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  /* STAGE TABS */
+  .stage-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    background: var(--surface);
+  }
+
+  .stage-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .stage-tab:hover { color: var(--text); }
+
+  .stage-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .stage-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    width: 24px; height: 24px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+
+  .stage-tab.done .stage-num {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - 113px);
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-section {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  /* FILE DROP */
+  .file-drop {
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .file-drop:hover, .file-drop.dragover {
+    border-color: var(--accent);
+    background: rgba(200, 255, 0, 0.04);
+  }
+
+  .file-drop input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .drop-text {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .drop-text strong { color: var(--text); display: block; margin-bottom: 0.25rem; }
+
+  .file-list {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .file-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    overflow: hidden;
+  }
+
+  .file-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* TEXT INPUT */
+  .text-input-wrap textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.75rem;
+    border-radius: 3px;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+    line-height: 1.6;
+    transition: border-color 0.2s;
+  }
+
+  .text-input-wrap textarea:focus { border-color: var(--accent); }
+  .text-input-wrap textarea::placeholder { color: var(--muted); }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn-primary:hover { background: #d4ff1a; }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+  }
+  .btn-danger:hover { background: var(--danger); color: white; }
+
+  /* OUTPUT PANEL */
+  .output-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .output-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+
+  .output-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .output-title strong { color: var(--accent); }
+
+  .output-actions { display: flex; gap: 0.5rem; }
+
+  .output-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+
+  /* EMPTY STATE */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .empty-icon {
+    font-size: 3rem;
+    opacity: 0.3;
+  }
+
+  .empty-state h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+    color: var(--border);
+  }
+
+  .empty-state p {
+    font-size: 0.8rem;
+    max-width: 300px;
+    line-height: 1.6;
+  }
+
+  /* LOADING */
+  .loading-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1.5rem;
+  }
+
+  .loading-bar-wrap {
+    width: 240px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .loading-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 30%;
+    animation: slide 1.5s ease-in-out infinite;
+  }
+
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(500%); }
+  }
+
+  .loading-text {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .loading-stage {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    color: var(--accent);
+    letter-spacing: 3px;
+  }
+
+  /* RESULT DISPLAY */
+  .result-pre {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .result-pre .highlight-race {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .result-pre .highlight-edge {
+    color: var(--accent2);
+  }
+
+  .result-pre .highlight-warn {
+    color: var(--danger);
+  }
+
+  /* TSV TABLE */
+  .tsv-wrap {
+    overflow-x: auto;
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .tsv-table {
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .tsv-table th {
+    background: var(--surface2);
+    color: var(--accent);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 1px;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+  }
+
+  .tsv-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .tsv-table tr:last-child td { border-bottom: none; }
+
+  .tsv-table tr:hover td { background: var(--surface2); }
+
+  .badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-clear { background: rgba(200,255,0,0.15); color: var(--accent); }
+  .badge-marginal { background: rgba(255,107,53,0.15); color: var(--accent2); }
+  .badge-no { background: rgba(255,59,59,0.15); color: var(--danger); }
+  .badge-y { background: rgba(0,230,118,0.15); color: var(--success); }
+  .badge-n { background: rgba(102,102,102,0.15); color: var(--muted); }
+
+  /* SECTION CARDS */
+  .section-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .section-card-header {
+    padding: 0.75rem 1rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .section-card-body { padding: 1rem; }
+
+  /* STAGE PANEL VISIBILITY */
+  .stage-panel { display: none; }
+  .stage-panel.active { display: contents; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1.25rem;
+    border-radius: 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text);
+    z-index: 999;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  .gap-sm { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .info-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-line:last-child { border-bottom: none; }
+  .info-key { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; }
+  .info-val { color: var(--text); font-weight: 500; }
+  .info-val.green { color: var(--success); }
+  .info-val.amber { color: var(--accent2); }
+  .info-val.red { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Racing<span>Edge</span></div>
+  <div class="api-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <input type="password" id="apiKey" placeholder="Enter Anthropic API key..." oninput="checkApiKey()">
+  </div>
+</header>
+
+<div class="stage-nav">
+  <div class="stage-tab active" id="tab1" onclick="switchTab(1)">
+    <div class="stage-num">1</div>
+    Structural Analysis
+  </div>
+  <div class="stage-tab" id="tab2" onclick="switchTab(2)">
+    <div class="stage-num">2</div>
+    Betting Strategy
+  </div>
+  <div class="stage-tab" id="tab3" onclick="switchTab(3)">
+    <div class="stage-num">3</div>
+    Post-Race Review
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- STAGE 1 SIDEBAR -->
+    <div id="sidebar1">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Race Files (PDFs)</div>
+        <div class="file-drop" id="dropZone1" ondragover="dragOver(event,'dropZone1')" ondragleave="dragLeave('dropZone1')" ondrop="dropFiles(event,'pdfFiles')">
+          <input type="file" multiple accept=".pdf,.zip" onchange="handleFiles(this,'pdfFiles')">
+          <div class="drop-icon">📄</div>
+          <div class="drop-text">
+            <strong>Drop race PDFs here</strong>
+            ZIP or individual PDFs<br>from the racecard provider
+          </div>
+        </div>
+        <div class="file-list" id="pdfFileList"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Distance Tab Data (Optional)</div>
+        <div class="file-drop" id="dropZone2" ondragover="dragOver(event,'dropZone2')" ondragleave="dragLeave('dropZone2')" ondrop="dropFiles(event,'distFiles')">
+          <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onchange="handleFiles(this,'distFiles')">
+          <div class="drop-icon">📊</div>
+          <div class="drop-text">
+            <strong>Distance screenshots</strong>
+            Speed data images or PDFs
+          </div>
+        </div>
+        <div class="file-list" id="distFileList"></div>
+      </div>
+
+      <div class="sidebar-section gap-sm">
+        <div class="sidebar-label">Meeting Info (Optional)</div>
+        <div class="text-input-wrap">
+          <textarea id="meetingInfo" placeholder="Meeting name, date, track... (optional context)" rows="3"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="runStage1()" id="btnStage1">
+          ▶ Run Structural Analysis
+        </button>
+      </div>
+    </div>
+
+    <!-- STAGE 2 SIDEBAR -->
+    <div id="sidebar2" style="display:none">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Stage 1 Output</div>
+        <div class="text-input-wrap">
+          <textarea id="stage1Input" placeholder="Paste Stage 1 analysis output here, or it will auto-populate if you ran Stage 1..." rows="10" style="min-height:200px"></textarea>
+        </div>
+      </div>
+
+      <div class="sidebar-section gap-sm">
+        <div class="sidebar-label">Bankroll</div>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <span style="font-size:0.9rem;color:var(--accent)">£</span>
+          <input type="number" id="bankroll" value="100" min="10" max="10000" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:0.4rem 0.6rem;font-family:'IBM Plex Mono',monospace;font-size:0.85rem;border-radius:3px;outline:none">
+        </div>
+        <button class="btn btn-primary" onclick="runStage2()" id="btnStage2">
+          ▶ Generate Betting Strategy
+        </button>
+      </div>
+    </div>
+
+    <!-- STAGE 3 SIDEBAR -->
+    <div id="sidebar3" style="display:none">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Result PDFs</div>
+        <div class="file-drop" id="dropZone3" ondragover="dragOver(event,'dropZone3')" ondragleave="dragLeave('dropZone3')" ondrop="dropFiles(event,'resultFiles')">
+          <input type="file" multiple accept=".pdf" onchange="handleFiles(this,'resultFiles')">
+          <div class="drop-icon">🏁</div>
+          <div class="drop-text">
+            <strong>Post-race result PDFs</strong>
+            Official results from the meeting
+          </div>
+        </div>
+        <div class="file-list" id="resultFileList"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Stage 2 Betting Output</div>
+        <div class="text-input-wrap">
+          <textarea id="stage2Input" placeholder="Paste Stage 2 betting strategy output here, or it will auto-populate..." rows="6"></textarea>
+        </div>
+      </div>
+
+      <div class="sidebar-section gap-sm">
+        <button class="btn btn-primary" onclick="runStage3()" id="btnStage3">
+          ▶ Run Post-Race Review
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- OUTPUT PANEL -->
+  <div class="output-panel">
+
+    <!-- STAGE 1 OUTPUT -->
+    <div class="stage-panel active" id="panel1">
+      <div class="output-header">
+        <div class="output-title">Stage 1 — <strong>Structural Analysis Engine</strong></div>
+        <div class="output-actions">
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="copyOutput('output1')">Copy</button>
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="sendToStage2()">→ Send to Stage 2</button>
+        </div>
+      </div>
+      <div class="output-body" id="output1">
+        <div class="empty-state">
+          <div class="empty-icon">🏇</div>
+          <h3>Awaiting Race Data</h3>
+          <p>Upload race PDFs in the sidebar and click Run Structural Analysis to begin the pre-race breakdown.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE 2 OUTPUT -->
+    <div class="stage-panel" id="panel2">
+      <div class="output-header">
+        <div class="output-title">Stage 2 — <strong>Betting Strategy</strong></div>
+        <div class="output-actions">
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="copyOutput('output2')">Copy</button>
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="downloadTSV()">⬇ TSV</button>
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="sendToStage3()">→ Send to Stage 3</button>
+        </div>
+      </div>
+      <div class="output-body" id="output2">
+        <div class="empty-state">
+          <div class="empty-icon">💷</div>
+          <h3>Awaiting Stage 1 Output</h3>
+          <p>Run Stage 1 first or paste the analysis output into the sidebar, then generate the betting strategy.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE 3 OUTPUT -->
+    <div class="stage-panel" id="panel3">
+      <div class="output-header">
+        <div class="output-title">Stage 3 — <strong>Post-Race Review</strong></div>
+        <div class="output-actions">
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="copyOutput('output3')">Copy</button>
+          <button class="btn btn-secondary" style="width:auto;padding:0.4rem 0.8rem;font-size:0.65rem" onclick="downloadTSV3()">⬇ TSV</button>
+        </div>
+      </div>
+      <div class="output-body" id="output3">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h3>Awaiting Results</h3>
+          <p>After racing, upload result PDFs and paste the Stage 2 output to run the end-of-day review and model learning.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const state = {
+  apiKey: '',
+  pdfFiles: [],
+  distFiles: [],
+  resultFiles: [],
+  stage1Output: '',
+  stage2Output: '',
+  stage3Output: '',
+  currentTab: 1
+};
+
+// ─── PROMPTS ──────────────────────────────────────────────────────────────────
+const PROMPT1 = `🧠 ROLE
+You are an elite horse racing structural analysis model.
+Your job is to produce a disciplined, race-by-race structural breakdown of a meeting.
+You are NOT trying to predict every winner.
+You ARE trying to:
+• understand race structure
+• identify realistic winning routes
+• detect weak favourites and false-clean races
+• construct accurate win zones
+• determine whether a race contains a real betting edge
+Your priority is correct structure, not forced conclusions
+
+🎯 PRIMARY OBJECTIVE
+For EVERY race, determine:
+• Race classification
+• Win zone
+• Most likely winner
+• Strongest place horse
+• Vulnerable favourite
+• Underrated alternative
+• Edge level (Clear Edge / Marginal Edge / No Edge)
+A race can be correct without being bettable
+
+🧠 CORE PRINCIPLES
+• Best horse ≠ best bet
+• Structure > ratings
+• Small field ≠ clean race
+• Tidy race ≠ strong race
+• Weak handicaps require caution
+• Market = information, NOT instruction
+• Correct avoidance = success
+• Most common error = win zone too narrow
+• A correct read ≠ automatic edge
+
+🔒 SOURCE LIMITATION RULE
+You MUST use ONLY information visible in the provided files.
+If something is NOT explicitly shown: Treat it as UNKNOWN, not negative. NEVER invent missing information.
+
+🧠 EVIDENCE HIERARCHY
+When signals conflict, prioritise:
+1. Race conditions (distance, class, field size)
+2. Visible runner evidence (comments, form, experience)
+3. Distance speed suitability
+4. Tactical clues (ONLY if clearly visible)
+5. Reliability / consistency signals
+6. Market position
+7. Forecast/editorial text
+8. Numerical scoring
+
+📤 OUTPUT FORMAT — use this EXACTLY for every race:
+Race [number] — [date] [time] [meeting] — [race title]
+Race metadata:
+Distance:
+Class:
+Field Size:
+Ground:
+Track:
+Track Type:
+Data confidence:
+Race classification:
+Win zone:
+Most likely winner:
+Strongest place horse:
+Vulnerable favourite:
+Underrated live alternative:
+Race shape:
+Scoring (Ability / Form / Suitability / Tactical / Reliability = Total):
+• Runner — x / x / x / x / x = x
+Why the race is classified this way:
+Favourite check:
+Edge assessment:
+
+🔢 SCORING ENGINE
+Score each runner:
+1. Ability / Class
+2. Recent Form
+3. Suitability
+4. Tactical Setup
+5. Reliability
+Scale: 0.0=negative, 0.5=weak, 1.0=fair, 1.5=strong, 2.0=elite
+Total = /10
+
+🧠 RACE CLASSIFICATION
+Single: ONLY if clear superiority + strong tactical support + stable race
+Dual: Two clear win routes
+Soft Chaos: 3–5 runners, partial structure
+Chaos: No reliable hierarchy
+
+📊 EDGE LABELLING
+Clear Edge: Strong structure + real superiority
+Marginal Edge: Competitive + conditional
+No Edge: Weak / wide / unstable
+
+Begin analysis immediately. Process every race. Maintain identical structure throughout.`;
+
+const PROMPT2 = `🧠 ROLE
+You are a second-stage betting strategist. Take the completed stage-one race analysis and convert it into disciplined betting decisions.
+
+🎯 PRIMARY OBJECTIVE
+Use a maximum available bankroll of £{BANKROLL} across the meeting to maximise long-term expected value by:
+• betting only where a genuine edge exists
+• choosing the best market, not defaulting to win betting
+• avoiding weak, unstable, or low-value races
+• preserving capital when the card does not justify action
+£{BANKROLL} is a ceiling, NOT a target. Unused bankroll is a successful outcome.
+
+🔒 HARD SOURCE RULE
+Use ONLY the completed stage-one analysis supplied. Do NOT invent missing data.
+
+STEP 1 — EDGE DETERMINATION
+Each race MUST be one of: Clear Edge / Marginal Edge / No Edge
+• No Edge = No Bet
+• Marginal Edge = No Bet by default
+• Clear Edge = betting candidate
+
+STEP 2 — TIER MAPPING
+• Tier 1 → Clear Edge + strong structure
+• Tier 2 → Marginal Edge
+• Tier 3 → No Edge
+
+STEP 4 — MARKET SELECTION (choose ONE):
+Win / Top 2 / Top 3 / Top 4 / Without Favourite / Not to Win / Not to Place / No Bet
+
+STEP 6 — STAKING
+• Tier 1 Win: £22–£35
+• Tier 2 selective: £5–£12
+• Tier 3: £0
+
+SECTION 1 — BETTING SUMMARY
+For EACH race provide: time / informational 1-2-3 / edge / decision / market / selection / stake / short reasoning
+
+SECTION 2 — FULL TSV OUTPUT
+Use EXACTLY this header in EXACTLY this order (34 columns, tab-separated):
+Date\tMeeting\tRace Time\tRace Type\tRace Subtype\tDistance\tClass\tField Size\tGround\tTrack\tTrack Type\tRace Classification\tWin Zone Size\tTop 3\tTier\tConfidence\tFalse Clean\tCompression\tPace Fragility\tNR Impact\tWinner\tSP\tWinner in Zone\tWinner Rank\tClassification Correct\tEdge Present\tBet Placed\tBet Type\tEdge Type\tSelection\tOdds\tStake\tResult\tProfit/Loss
+
+TSV RULES:
+• Ground normalisation: Firm/Good to Firm/Good/Good to Soft/Soft/Heavy/AW/AW Slow
+• Race Type: Flat/Hurdle/Chase only
+• False Clean/Compression/Pace Fragility/NR Impact: Y or N only (never blank)
+• Bet Placed: Y or N (never blank)
+• Results fields (Winner/SP etc) leave blank pre-race
+
+Output the full TSV after the betting summary.`;
+
+const PROMPT3 = `You are an elite post-race review and model-learning analyst.
+Review the completed race meeting and determine:
+• what the model expected
+• what actually happened
+• where the process was correct / wrong
+• whether bets were justified
+• whether valid opportunities were missed
+• what the model should learn going forward
+
+CORE REVIEW PRINCIPLES
+• Process matters more than outcome
+• A losing bet can still be correct process
+• A winning bet can still be poor process
+• Avoid hindsight bias
+• Be specific and evidence-based
+• Call model errors clearly
+
+For every race use this EXACT structure:
+Race: [time + race title]
+1. Expected vs Actual
+2. Result Breakdown
+3. Process vs Outcome (Good process good result / Good process bad result / Bad process bad result / Bad process good result)
+4. Win Zone Validation
+5. Race Classification Check
+6. Bet Type Evaluation
+7. Edge vs Noise (Clear edge / Marginal edge / No edge)
+7B. Missed Opportunity Analysis
+8. Luck vs Error
+
+SHEET UPDATE BLOCK after each race:
+POST-RACE DATA
+Date: / Meeting: / Race Time: / Winner: / SP: / Winner in Zone: / Winner Rank: / Classification Correct: / Edge Present: / Bet Placed: / Bet Type: / Selection: / Odds: / Stake: / Profit/Loss:
+
+TSV at end (tab-separated, one row per race):
+Winner\tSP\tWinner in Zone\tWinner Rank\tClassification Correct\tEdge Present
+
+END OF DAY REVIEW sections:
+1. Overall Race Reading
+2. What Went Right
+3. What Went Wrong
+4. Pattern Detection
+5. Betting & Staking Review
+6. Model Adjustments (If Needed)
+
+FINAL SUMMARY — MODEL LEARNING BLOCK with all sub-fields.
+FINAL VERDICT line: Process = Good/Mixed/Poor | Execution = Good/Mixed/Poor | Model Direction = Positive/Neutral/Negative`;
+
+// ─── API KEY ─────────────────────────────────────────────────────────────────
+function checkApiKey() {
+  state.apiKey = document.getElementById('apiKey').value.trim();
+  document.getElementById('statusDot').className = 'status-dot' + (state.apiKey.startsWith('sk-ant-') ? ' active' : '');
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(n) {
+  state.currentTab = n;
+  [1,2,3].forEach(i => {
+    document.getElementById('tab'+i).className = 'stage-tab' + (i===n?' active':'');
+    document.getElementById('panel'+i).className = 'stage-panel' + (i===n?' active':'');
+    document.getElementById('sidebar'+i).style.display = i===n ? 'block' : 'none';
+  });
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFiles(input, key) {
+  const files = Array.from(input.files);
+  state[key] = [...state[key], ...files];
+  renderFileList(key);
+}
+
+function dropFiles(e, key) {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files);
+  state[key] = [...state[key], ...files];
+  renderFileList(key);
+  document.querySelectorAll('.file-drop').forEach(d => d.classList.remove('dragover'));
+}
+
+function dragOver(e, id) {
+  e.preventDefault();
+  document.getElementById(id).classList.add('dragover');
+}
+
+function dragLeave(id) {
+  document.getElementById(id).classList.remove('dragover');
+}
+
+function renderFileList(key) {
+  const listIds = { pdfFiles: 'pdfFileList', distFiles: 'distFileList', resultFiles: 'resultFileList' };
+  const el = document.getElementById(listIds[key]);
+  if (!el) return;
+  el.innerHTML = state[key].map((f,i) => `
+    <div class="file-item">
+      <span>📄 ${f.name}</span>
+    </div>
+  `).join('');
+}
+
+// ─── FILE TO BASE64 ──────────────────────────────────────────────────────────
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ─── RENDER OUTPUT ────────────────────────────────────────────────────────────
+function renderOutput(panelId, text) {
+  const el = document.getElementById(panelId);
+
+  // Try to split TSV section for stage 2
+  if (panelId === 'output2') {
+    const tsvStart = text.indexOf('Date\tMeeting');
+    if (tsvStart !== -1) {
+      const before = text.substring(0, tsvStart);
+      const tsvRaw = text.substring(tsvStart);
+      el.innerHTML = `
+        <div class="section-card">
+          <div class="section-card-header">📊 Betting Summary</div>
+          <div class="section-card-body"><pre class="result-pre">${escapeHtml(before.trim())}</pre></div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-header">📋 TSV Data Table</div>
+          <div class="section-card-body">${renderTSV(tsvRaw)}</div>
+        </div>
+      `;
+      return;
+    }
+  }
+
+  if (panelId === 'output3') {
+    el.innerHTML = `
+      <div class="section-card">
+        <div class="section-card-header">🔍 Post-Race Review</div>
+        <div class="section-card-body"><pre class="result-pre">${escapeHtml(text)}</pre></div>
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `<pre class="result-pre">${escapeHtml(text)}</pre>`;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderTSV(tsv) {
+  const lines = tsv.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return `<pre class="result-pre">${escapeHtml(tsv)}</pre>`;
+  const headers = lines[0].split('\t');
+  const rows = lines.slice(1);
+
+  const edgeIdx = headers.indexOf('Edge Type');
+  const betIdx = headers.indexOf('Bet Placed');
+
+  return `<div class="tsv-wrap"><table class="tsv-table">
+    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => {
+      const cells = r.split('\t');
+      return `<tr>${cells.map((c,i) => {
+        let val = c;
+        if (i === edgeIdx) {
+          if (c === 'Clear Edge') val = `<span class="badge badge-clear">Clear Edge</span>`;
+          else if (c === 'Marginal Edge') val = `<span class="badge badge-marginal">Marginal</span>`;
+          else if (c === 'No Edge') val = `<span class="badge badge-no">No Edge</span>`;
+        }
+        if (i === betIdx) {
+          val = c === 'Y' ? `<span class="badge badge-y">Y</span>` : `<span class="badge badge-n">N</span>`;
+        }
+        return `<td>${val}</td>`;
+      }).join('')}</tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+// ─── LOADING STATE ────────────────────────────────────────────────────────────
+function showLoading(panelId, stageLabel) {
+  document.getElementById(panelId).innerHTML = `
+    <div class="loading-block">
+      <div class="loading-stage">${stageLabel}</div>
+      <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+      <div class="loading-text">Analysing race data...</div>
+    </div>
+  `;
+}
+
+// ─── CALL API ────────────────────────────────────────────────────────────────
+async function callClaude(systemPrompt, userContent) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content.map(b => b.text || '').join('');
+}
+
+// ─── STAGE 1 ──────────────────────────────────────────────────────────────────
+async function runStage1() {
+  if (!state.apiKey) { showToast('Enter your Anthropic API key first', 'error'); return; }
+  if (state.pdfFiles.length === 0) { showToast('Upload at least one race PDF', 'error'); return; }
+
+  document.getElementById('btnStage1').disabled = true;
+  switchTab(1);
+  showLoading('output1', 'STAGE 1 — STRUCTURAL ANALYSIS');
+
+  try {
+    const contentBlocks = [];
+
+    // Add context text
+    const meetingInfo = document.getElementById('meetingInfo').value.trim();
+    contentBlocks.push({
+      type: 'text',
+      text: meetingInfo
+        ? `Meeting: ${meetingInfo}\n\nPlease analyse all the provided race PDFs for this meeting.`
+        : 'Please analyse all the provided race PDFs for this meeting.'
+    });
+
+    // Add PDFs
+    for (const file of state.pdfFiles) {
+      const b64 = await fileToBase64(file);
+      const isImage = file.type.startsWith('image/');
+      if (isImage) {
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } });
+      } else {
+        contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
+      }
+    }
+
+    // Add distance screenshots
+    for (const file of state.distFiles) {
+      const b64 = await fileToBase64(file);
+      const isImage = file.type.startsWith('image/');
+      if (isImage) {
+        contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } });
+        contentBlocks.push({ type: 'text', text: 'Above is a distance tab / speed data screenshot.' });
+      } else {
+        contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
+      }
+    }
+
+    const result = await callClaude(PROMPT1, contentBlocks);
+    state.stage1Output = result;
+
+    renderOutput('output1', result);
+    document.getElementById('tab1').querySelector('.stage-num').parentElement.classList.add('done');
+    showToast('Stage 1 complete — click → Send to Stage 2', 'success');
+
+  } catch (err) {
+    document.getElementById('output1').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>Analysis Failed</h3>
+        <p style="color:var(--danger)">${err.message}</p>
+      </div>`;
+    showToast(err.message, 'error');
+  }
+
+  document.getElementById('btnStage1').disabled = false;
+}
+
+// ─── STAGE 2 ──────────────────────────────────────────────────────────────────
+async function runStage2() {
+  if (!state.apiKey) { showToast('Enter your Anthropic API key first', 'error'); return; }
+
+  const input = document.getElementById('stage1Input').value.trim() || state.stage1Output;
+  if (!input) { showToast('No Stage 1 output found — run Stage 1 first or paste output', 'error'); return; }
+
+  const bankroll = document.getElementById('bankroll').value || 100;
+  document.getElementById('btnStage2').disabled = true;
+  showLoading('output2', 'STAGE 2 — BETTING STRATEGY');
+
+  try {
+    const prompt = PROMPT2.replace(/\{BANKROLL\}/g, bankroll);
+    const result = await callClaude(prompt, `Here is the completed Stage 1 structural analysis:\n\n${input}`);
+    state.stage2Output = result;
+
+    renderOutput('output2', result);
+    document.getElementById('tab2').querySelector('.stage-num').parentElement.classList.add('done');
+    showToast('Stage 2 complete', 'success');
+
+  } catch (err) {
+    document.getElementById('output2').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>Strategy Failed</h3>
+        <p style="color:var(--danger)">${err.message}</p>
+      </div>`;
+    showToast(err.message, 'error');
+  }
+
+  document.getElementById('btnStage2').disabled = false;
+}
+
+// ─── STAGE 3 ──────────────────────────────────────────────────────────────────
+async function runStage3() {
+  if (!state.apiKey) { showToast('Enter your Anthropic API key first', 'error'); return; }
+
+  const stage2 = document.getElementById('stage2Input').value.trim() || state.stage2Output;
+  if (!stage2 && state.resultFiles.length === 0) {
+    showToast('Upload result PDFs and/or paste Stage 2 output', 'error');
+    return;
+  }
+
+  document.getElementById('btnStage3').disabled = true;
+  showLoading('output3', 'STAGE 3 — POST-RACE REVIEW');
+
+  try {
+    const contentBlocks = [];
+
+    let userText = 'Please conduct the full post-race review for this meeting.';
+    if (stage2) userText += `\n\nStage 2 Betting Strategy Output:\n${stage2}`;
+    contentBlocks.push({ type: 'text', text: userText });
+
+    for (const file of state.resultFiles) {
+      const b64 = await fileToBase64(file);
+      contentBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
+    }
+
+    const result = await callClaude(PROMPT3, contentBlocks);
+    state.stage3Output = result;
+
+    renderOutput('output3', result);
+    document.getElementById('tab3').querySelector('.stage-num').parentElement.classList.add('done');
+    showToast('Stage 3 review complete', 'success');
+
+  } catch (err) {
+    document.getElementById('output3').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>Review Failed</h3>
+        <p style="color:var(--danger)">${err.message}</p>
+      </div>`;
+    showToast(err.message, 'error');
+  }
+
+  document.getElementById('btnStage3').disabled = false;
+}
+
+// ─── PASS BETWEEN STAGES ──────────────────────────────────────────────────────
+function sendToStage2() {
+  if (!state.stage1Output) { showToast('No Stage 1 output yet', 'error'); return; }
+  document.getElementById('stage1Input').value = state.stage1Output;
+  switchTab(2);
+  showToast('Stage 1 output loaded into Stage 2', 'success');
+}
+
+function sendToStage3() {
+  if (!state.stage2Output) { showToast('No Stage 2 output yet', 'error'); return; }
+  document.getElementById('stage2Input').value = state.stage2Output;
+  switchTab(3);
+  showToast('Stage 2 output loaded into Stage 3', 'success');
+}
+
+// ─── COPY / DOWNLOAD ─────────────────────────────────────────────────────────
+function copyOutput(id) {
+  const text = { output1: state.stage1Output, output2: state.stage2Output, output3: state.stage3Output }[id];
+  if (!text) { showToast('Nothing to copy', 'error'); return; }
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
+}
+
+function downloadTSV() {
+  if (!state.stage2Output) { showToast('No Stage 2 output', 'error'); return; }
+  const lines = state.stage2Output.split('\n');
+  const start = lines.findIndex(l => l.startsWith('Date\t'));
+  if (start === -1) { showToast('No TSV found in output', 'error'); return; }
+  const tsv = lines.slice(start).join('\n');
+  downloadFile(tsv, 'racing-bets.tsv', 'text/tab-separated-values');
+}
+
+function downloadTSV3() {
+  if (!state.stage3Output) { showToast('No Stage 3 output', 'error'); return; }
+  const lines = state.stage3Output.split('\n');
+  const start = lines.findIndex(l => l.startsWith('Winner\t'));
+  if (start === -1) { showToast('No TSV found in output', 'error'); return; }
+  const tsv = lines.slice(start).join('\n');
+  downloadFile(tsv, 'racing-review.tsv', 'text/tab-separated-values');
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+switchTab(1);
+</script>
+</body>
+</html>
